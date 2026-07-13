@@ -1,0 +1,278 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #202020;
+  font-family: Arial, sans-serif;
+}
+
+#startBtn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 10px 12px;
+  background: white;
+  border: none;
+  cursor: pointer;
+  z-index: 10;
+}
+
+#startBtn[hidden] {
+  display: none !important;
+}
+
+#fullscreenBtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 10px 12px;
+  background: white;
+  border: none;
+  cursor: pointer;
+  z-index: 10;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#controls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 60px 60px 60px;
+  gap: 10px;
+  z-index: 10;
+  user-select: none;
+}
+
+#controls[hidden] {
+  display: none !important;
+}
+
+button.move {
+  width: 60px;
+  height: 60px;
+  font-size: 18px;
+  opacity: 0.75;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#forward { grid-column: 2; }
+#left { grid-column: 1; grid-row: 2; }
+#back { grid-column: 2; grid-row: 2; }
+#right { grid-column: 3; grid-row: 2; }
+
+#lightDebug,
+.light-debug-panel {
+  position: absolute;
+  right: 20px;
+  bottom: 72px;
+  min-width: 200px;
+  max-width: min(280px, 92vw);
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #e8e8e8;
+  font: 12px/1.45 Consolas, "Courier New", monospace;
+  z-index: 12;
+  border-radius: 8px;
+  border: 1px solid #5a7a9a;
+  pointer-events: none;
+  user-select: none;
+}
+
+#lightDebug[hidden],
+.light-debug-panel[hidden] {
+  display: none !important;
+}
+
+.light-debug-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.light-debug-title {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  color: #9ecbff;
+}
+
+.light-debug-nav {
+  pointer-events: auto;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: #e8e8e8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.light-debug-nav:hover {
+  background: #3a3a3a;
+  border-color: #8ab4ff;
+}
+
+.light-debug-nav:active {
+  background: #4a4a4a;
+}
+
+.light-debug-body .k {
+  display: inline-block;
+  min-width: 3.2em;
+  color: #9aa;
+}
+
+.light-debug-hint {
+  margin-top: 8px;
+  font-size: 10px;
+  color: #888;
+}
+
+#lightmapDebug {
+  position: absolute;
+  top: 56px;
+  left: 20px;
+  max-width: min(420px, 92vw);
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #e8e8e8;
+  font: 12px/1.45 Consolas, "Courier New", monospace;
+  z-index: 11;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+#lightmapDebug h3 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+#lightmapDebug .ok { color: #7dffb3; }
+#lightmapDebug .warn { color: #ffd47d; }
+#lightmapDebug .err { color: #ff7d7d; }
+
+#lightmapDebugPreview {
+  display: block;
+  margin-top: 8px;
+  width: 128px;
+  height: 128px;
+  image-rendering: pixelated;
+  background: #111;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+#lightmapDebugPreview.hidden { display: none; }
+
+/* ── Interact prompt (bottom-center) ─────────────────────────── */
+.interact-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+  transform: translateX(-50%) translateY(8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 1.25rem;
+  min-height: 2.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    rgba(12, 14, 18, 0.72);
+  color: #f2f4f7;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: clamp(0.95rem, 2.4vw, 1.1rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.interact-prompt[hidden] {
+  display: none !important;
+}
+
+.interact-prompt.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.interact-prompt:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06)),
+    rgba(12, 14, 18, 0.82);
+}
+
+.interact-prompt:active {
+  transform: translateX(-50%) translateY(1px) scale(0.98);
+}
+
+.interact-prompt-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.55rem;
+  height: 1.55rem;
+  padding: 0 0.35rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #dce6f2;
+}
+
+.interact-prompt-label {
+  text-transform: none;
+}
+
+@media (max-width: 640px) {
+  .interact-prompt {
+    bottom: max(7.5rem, calc(env(safe-area-inset-bottom, 0px) + 6.5rem));
+    padding: 0.85rem 1.4rem;
+    min-height: 3.1rem;
+    font-size: 1.05rem;
+    gap: 0.75rem;
+  }
+
+  .interact-prompt-hint {
+    min-width: 1.75rem;
+    height: 1.75rem;
+  }
+}
+
+/* Hide key hint on coarse pointers (touch) — tap the pill instead. */
+@media (pointer: coarse) {
+  .interact-prompt-hint {
+    display: none;
+  }
+}

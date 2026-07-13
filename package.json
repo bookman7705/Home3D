@@ -1,0 +1,14 @@
+{
+  "name": "room-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Browser room viewer with baked lightmaps, Rapier physics, and Three.js",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve ."
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.19.3",
+    "three": "0.160.0"
+  }
+}

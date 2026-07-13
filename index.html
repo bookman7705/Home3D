@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Light Test — baked lightmaps + normals</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <button id="startBtn" type="button" hidden>Enable Look</button>
+  <button type="button" id="fullscreenBtn" aria-pressed="false">Fullscreen</button>
+  <div id="controls" hidden aria-hidden="true">
+    <button id="forward" class="move" type="button">↑</button>
+    <button id="left" class="move" type="button">←</button>
+    <button id="back" class="move" type="button">↓</button>
+    <button id="right" class="move" type="button">→</button>
+  </div>
+
+  <button id="interactPrompt" type="button" class="interact-prompt" hidden aria-hidden="true">
+    <span id="interactPromptHint" class="interact-prompt-hint">E</span>
+    <span id="interactPromptLabel" class="interact-prompt-label"></span>
+  </button>
+
+  <div id="lightDebug" hidden></div>
+
+  <div id="lightmapDebug" aria-live="polite" hidden>
+    <h3>Lightmap debug</h3>
+    <div id="lightmapDebugBody"></div>
+    <canvas id="lightmapDebugPreview" class="hidden" width="128" height="128"></canvas>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs"
+      }
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

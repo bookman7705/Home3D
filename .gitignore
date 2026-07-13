@@ -1,0 +1,12 @@
+# Dependencies (Three.js + Rapier load from CDN via index.html import map)
+node_modules/
+
+# Heavy assets hosted on Cloudflare R2 (models, HDR, lightmaps, music)
+assets/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
