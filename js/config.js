@@ -12,7 +12,13 @@ import { INTERACT_DEFAULTS } from "./interact/defaults.js";
  * bakeSettings, and AO paths. Stem/global-atlas fallbacks apply when the
  * manifest is missing or useLightmapManifest is false.
  */
-/** Cloudflare R2 public base for heavy assets (models, HDR, lightmaps, music). */
+/**
+ * Public Cloudflare R2 bucket (Home3D assets).
+ * Example: https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/models/floor.glb
+ *
+ * For CORS from GitHub Pages, either enable R2 bucket CORS or point ASSET_CDN
+ * at your Worker URL (worker.js proxies this same R2 base).
+ */
 const ASSET_CDN = "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D";
 
 export const CONFIG = {

@@ -34,7 +34,8 @@ export const LIGHTING_DEFAULTS = {
   /** Toggle HDR environment lighting/reflections. */
   useHdr: true,
   /** Equirect .hdr — PMREM → scene.environment only (IBL / reflections, not sky). */
-  environmentHdrUrl: "./assets/hdr/aerodynamics_workshop_1k.hdr",
+  environmentHdrUrl:
+    "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/hdr/aerodynamics_workshop_1k.hdr",
   /** ACES exposure (HDR + sun). */
   toneMappingExposure: 1,
   /** Scales HDRI contribution on MeshStandardMaterial (reflections / indirect spec). */
@@ -48,7 +49,7 @@ export const LIGHTING_DEFAULTS = {
   enableFlashlight: false,
   flashlightIntensity: 50,
   /** When true, load `lightmap_lighting.json` from AutoLightmap.py for sun angle. */
-  useBlenderLightingManifest: true,
+  useBlenderLightingManifest: false,
   /** Fallback sun Euler (degrees) when lightmap_lighting.json is missing. */
   blenderDirectionalEulerDeg: [-28.061, 38.8838, -47.3439],
   /** Blender Euler order used for the values above. */
