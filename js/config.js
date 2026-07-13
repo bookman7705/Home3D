@@ -13,13 +13,11 @@ import { INTERACT_DEFAULTS } from "./interact/defaults.js";
  * manifest is missing or useLightmapManifest is false.
  */
 /**
- * Public Cloudflare R2 bucket (Home3D assets).
- * Example: https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/models/floor.glb
- *
- * For CORS from GitHub Pages, either enable R2 bucket CORS or point ASSET_CDN
- * at your Worker URL (worker.js proxies this same R2 base).
+ * Public Cloudflare R2 bucket `3d-assets` → https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev
+ * Object keys under Home3D/: models, hdr, music, LightMaps
  */
-const ASSET_CDN = "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D";
+const R2_PUBLIC = "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev";
+const ASSET_CDN = `${R2_PUBLIC}/Home3D`;
 
 export const CONFIG = {
   glbUrl: `${ASSET_CDN}/models/floor.glb`,
@@ -31,8 +29,8 @@ export const CONFIG = {
   lightmapBaseStem: "",
   /** glTF node name → baked PNG stem (no extension). Fallback when manifest is off. */
   lightmapMeshStems: {},
-  /** Folder containing baked PNGs and lightmap_manifest.json */
-  lightmapTextureBasePath: `${ASSET_CDN}/lightmaps/`,
+  /** Folder containing baked PNGs and lightmap_manifest.json (R2: Home3D/LightMaps/) */
+  lightmapTextureBasePath: `${ASSET_CDN}/LightMaps/`,
   /** Background music (OGG preferred; MP3 fallback for Safari / iOS). */
   musicOggUrl: `${ASSET_CDN}/music/Snoop.ogg`,
   musicMp3Url: `${ASSET_CDN}/music/snoop.mp3`,
