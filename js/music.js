@@ -3,6 +3,8 @@
  * iOS/Android block audible playback until a user gesture; we retry on first input.
  */
 export function createBackgroundMusic(config = {}) {
+  const enabled = config.enableMusic !== false;
+
   const oggUrl =
     config.musicOggUrl ||
     "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/music/Snoop.ogg";
@@ -92,13 +94,16 @@ export function createBackgroundMusic(config = {}) {
     audio.load();
   }
 
-  start();
+  if (enabled) {
+    start();
+  }
 
   return {
     audio,
     play,
     start,
     dispose,
+    enabled,
     get started() {
       return started;
     },

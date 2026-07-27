@@ -54,8 +54,11 @@ import {
 import { createBackgroundMusic } from "./music.js";
 
 const worldScale = Math.max(0.0001, Number(CONFIG.worldScale) || 1);
+const levelFeatures = CONFIG.levelFeatures ?? {};
 const FIXED_DT = 1 / 60;
 const MAX_PHYSICS_STEPS = 5;
+
+const spawn = CONFIG.cameraSpawn ?? [2.11, 1.71, -0.564];
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x202020);
@@ -66,7 +69,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(2.11 * worldScale, 1.71 * worldScale, -0.564 * worldScale);
+camera.position.set(spawn[0] * worldScale, spawn[1] * worldScale, spawn[2] * worldScale);
 scene.add(camera);
 
 const renderer = new THREE.WebGLRenderer({
@@ -90,18 +93,24 @@ const lighting = createLightingSystem({
   worldScale,
 });
 
-/** */
-const windowLight = createBlenderRectAreaLight({
-  scene,
-  config: CONFIG,
-  worldScale,
-});
-if (windowLight.light) {
-  lighting.registerSceneLight(windowLight.light);
+/** Window rect area light — floor level only unless enabled per-level. */
+let windowLight = null;
+if (CONFIG.enableBlenderRectAreaLight !== false && levelFeatures.windowRectLight !== false) {
+  windowLight = createBlenderRectAreaLight({
+    scene,
+    config: CONFIG,
+    worldScale,
+  });
+  if (windowLight.light) {
+    lighting.registerSceneLight(windowLight.light);
+  }
 }
 
 const lightmapDebug = createLightmapDebugUI(CONFIG);
-const fanPointLight = createFanPointLight({ scene, config: CONFIG, worldScale });
+const fanPointLight =
+  levelFeatures.scenePointLight !== false
+    ? createFanPointLight({ scene, config: CONFIG, worldScale })
+    : { light: null, bedRoomLight: null, dispose() {} };
 const initialControlMode = detectControlMode();
 const usePhysics = CONFIG.enablePhysics !== false;
 const player = createPlayerControls({
@@ -142,7 +151,9 @@ const startBtn = document.getElementById("startBtn");
 if (startBtn) {
   startBtn.onclick = () => {
     player.enableDeviceOrientation();
-    backgroundMusic.play();
+    if (backgroundMusic.enabled !== false) {
+      backgroundMusic.play();
+    }
   };
 }
 const gltfLoader = new GLTFLoader();
@@ -249,7 +260,9 @@ function syncLightmapApplication() {
   if (apply.skippedMeshNames?.length) {
     console.warn("[Lightmap] No manifest match for:", apply.skippedMeshNames);
   }
-  refreshFanShadowFlags(gltfScene);
+  if (levelFeatures.fan !== false) {
+    refreshFanShadowFlags(gltfScene);
+  }
   console.info(
     "[Lightmap] enableLightMaps =",
     CONFIG.enableLightMaps,
@@ -262,7 +275,7 @@ async function setupPhysicsForScene(root) {
   if (!usePhysics) return;
 
   try {
-    physics = await createPhysics();
+    physics = await createPhysics(CONFIG.physicsGravity);
     collisionLevel = createCollisionFromColMeshes(
       physics.RAPIER,
       physics.world,
@@ -307,7 +320,7 @@ async function setupPhysicsForScene(root) {
 }
 
 function setupInteractForScene(root) {
-  if (CONFIG.enableInteract === false) return;
+  if (CONFIG.enableInteract === false || levelFeatures.interact === false) return;
 
   fanState = createFanStateController({
     config: CONFIG,
@@ -344,6 +357,7 @@ function setupInteractForScene(root) {
 }
 
 function bootstrap() {
+  console.info(`[Level] Loading "${CONFIG.levelName ?? CONFIG.levelId}" from`, CONFIG.glbUrl);
   gltfLoader.load(
     CONFIG.glbUrl,
     async (gltf) => {
@@ -352,38 +366,47 @@ function bootstrap() {
         scene.add(gltfScene);
         gltfScene.scale.setScalar(worldScale);
         gltfScene.updateMatrixWorld(true);
-        // Default FanState is ON — hide Off lever before slow CDN lightmap loads.
-        applyLightSwitchLeverVisibility(gltfScene, true);
+        if (levelFeatures.fan !== false) {
+          // Default FanState is ON — hide Off lever before slow CDN lightmap loads.
+          applyLightSwitchLeverVisibility(gltfScene, true);
+        }
 
         // Bake COL_* colliders and detach them before lightmap / material work.
         await setupPhysicsForScene(gltfScene);
         // ENV_* sensors (non-blocking) + interact prompt / FanState.
         setupInteractForScene(gltfScene);
-        // Bind levers / bulbs early so toggles work during lightmap loading.
-        fanState?.bootstrap();
+        if (levelFeatures.fan !== false) {
+          fanState?.bootstrap();
+        }
 
         disableRealtimeShadowsInScene(gltfScene);
         lighting.applySceneLightsEnabled(CONFIG.enableSceneLights, gltfScene);
 
-        const { fan } = setupFanPointLightShadows({
-          renderer,
-          gltfRoot: gltfScene,
-          pointLight: fanPointLight.light,
-          directionalLight: lighting.directionalLight,
-          flashlight: lighting.flashlight,
-          config: CONFIG,
-        });
-        lightDebug.refreshLights();
-        lightDebug.selectByName("FanPointLightFill");
-        fanAnimation?.dispose();
-        fanAnimation = createFanAnimation({
-          gltf,
-          fanMesh: fan,
-          config: CONFIG,
-        });
-        fanState?.setFanAnimation(fanAnimation);
-        fanState?.setFanPointLight(fanPointLight.light);
-        fanState?.setBedRoomPointLight(fanPointLight.bedRoomLight);
+        let fan = null;
+        if (levelFeatures.fan !== false && fanPointLight.light) {
+          const shadowSetup = setupFanPointLightShadows({
+            renderer,
+            gltfRoot: gltfScene,
+            pointLight: fanPointLight.light,
+            directionalLight: lighting.directionalLight,
+            flashlight: lighting.flashlight,
+            config: CONFIG,
+          });
+          fan = shadowSetup.fan;
+          lightDebug.refreshLights();
+          lightDebug.selectByName("FanPointLightFill");
+          fanAnimation?.dispose();
+          fanAnimation = createFanAnimation({
+            gltf,
+            fanMesh: fan,
+            config: CONFIG,
+          });
+          fanState?.setFanAnimation(fanAnimation);
+          fanState?.setFanPointLight(fanPointLight.light);
+          fanState?.setBedRoomPointLight(fanPointLight.bedRoomLight);
+        } else {
+          lightDebug.refreshLights();
+        }
 
         lightmapRuntime = await loadLightmapResources(gltfScene);
 
@@ -395,12 +418,14 @@ function bootstrap() {
 
         syncLightmapApplication();
         refreshLightmapRenderSettings(gltfScene, lightmapRuntime.lightmapConfig);
-        // Lightmap/material passes can rebuild materials — re-assert Fan shadows.
-        refreshFanShadowFlags(gltfScene);
-        // Apply FanState defaults (ON) after lightmaps exist.
-        fanState?.bootstrap();
-        // Re-assert bulb materials after any late material passes.
-        fanState?.sync();
+        if (levelFeatures.fan !== false) {
+          // Lightmap/material passes can rebuild materials — re-assert Fan shadows.
+          refreshFanShadowFlags(gltfScene);
+          // Apply FanState defaults (ON) after lightmaps exist.
+          fanState?.bootstrap();
+          // Re-assert bulb materials after any late material passes.
+          fanState?.sync();
+        }
       } catch (err) {
         console.error("[Lightmap] After GLB load:", err);
       }

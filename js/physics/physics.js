@@ -2,12 +2,16 @@ import RAPIER from "@dimforge/rapier3d-compat";
 
 /**
  * Initializes Rapier and creates the physics world.
+ * @param {{ x?: number, y?: number, z?: number }} [gravity]
  */
-export async function createPhysics() {
+export async function createPhysics(gravity = { x: 0, y: -9.81, z: 0 }) {
   await RAPIER.init();
 
-  const gravity = { x: 0, y: -9.81, z: 0 };
-  const world = new RAPIER.World(gravity);
+  const world = new RAPIER.World({
+    x: gravity.x ?? 0,
+    y: gravity.y ?? -9.81,
+    z: gravity.z ?? 0,
+  });
 
   return { RAPIER, world };
 }

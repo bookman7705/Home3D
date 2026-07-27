@@ -109,7 +109,12 @@ export function createFanPointLight({ scene, config = {}, worldScale = 1 }) {
   const legacyChild = light.getObjectByName(BEDROOM_POINT_LIGHT_NAME);
   if (legacyChild) light.remove(legacyChild);
 
-  const bedRoom = createBedRoomPointLight({ scene, config, worldScale });
+  const includeBedRoom =
+    config.levelFeatures?.bedRoomPointLight !== false &&
+    (Number(config.bedRoomPointLightIntensity) || 0) > 0;
+  const bedRoom = includeBedRoom
+    ? createBedRoomPointLight({ scene, config, worldScale })
+    : { light: null, dispose() {} };
 
   console.info(
     `[${FAN_POINT_LIGHT_NAME}] Created at`,

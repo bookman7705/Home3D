@@ -1,10 +1,13 @@
 /**
  * App configuration — lightmap paths + lighting defaults (see lighting.js).
+ * Active level/stage overrides are merged from js/levels/.
  */
 import { LIGHTING_DEFAULTS } from "./lighting.js";
 import { DEBUG_POINT_LIGHT_DEFAULTS } from "./debug-point-light.js";
 import { BLENDER_RECT_LIGHT_DEFAULTS } from "./blender-rect-area-light.js";
 import { INTERACT_DEFAULTS } from "./interact/defaults.js";
+import { ASSET_CDN } from "./assets.js";
+import { applyLevelToConfig, getActiveLevel } from "./levels/index.js";
 
 /**
  * AutoLightmapv5: per-object entries in lightmaps/lightmap_manifest.json
@@ -12,15 +15,8 @@ import { INTERACT_DEFAULTS } from "./interact/defaults.js";
  * bakeSettings, and AO paths. Stem/global-atlas fallbacks apply when the
  * manifest is missing or useLightmapManifest is false.
  */
-/**
- * Public Cloudflare R2 bucket `3d-assets` → https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev
- * Object keys under Home3D/: models, hdr, music, LightMaps
- */
-const R2_PUBLIC = "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev";
-const ASSET_CDN = `${R2_PUBLIC}/Home3D`;
 
-export const CONFIG = {
-  glbUrl: `${ASSET_CDN}/models/floor.glb`,
+const BASE_CONFIG = {
   /** Global world/model scale (1 = authored size). */
   worldScale: 1,
   /** Same as AutoLightmap.py IMAGE_NAME (grouped atlases only). */
@@ -31,10 +27,8 @@ export const CONFIG = {
   lightmapMeshStems: {},
   /** Folder containing baked PNGs and lightmap_manifest.json (R2: Home3D/LightMaps/) */
   lightmapTextureBasePath: `${ASSET_CDN}/LightMaps/`,
-  /** Background music (OGG preferred; MP3 fallback for Safari / iOS). */
-  musicOggUrl: `${ASSET_CDN}/music/Snoop.ogg`,
-  musicMp3Url: `${ASSET_CDN}/music/snoop.mp3`,
   musicVolume: 0.55,
+  enableMusic: true,
   /** Load AutoLightmapv5 lightmap_manifest.json (lightmaps / meshes / meshesByName). */
   useLightmapManifest: true,
   lightmapManifestFilename: "lightmap_manifest.json",
@@ -76,6 +70,8 @@ export const CONFIG = {
     jumpSpeed: 7.0,
     gravity: -20.0,
   },
+  physicsGravity: { x: 0, y: -9.81, z: 0 },
+  cameraSpawn: [2.11, 1.71, -0.564],
   ...LIGHTING_DEFAULTS,
   /** Equirect HDR — served from Cloudflare R2. */
   environmentHdrUrl: `${ASSET_CDN}/hdr/aerodynamics_workshop_1k.hdr`,
@@ -116,3 +112,5 @@ export const CONFIG = {
   /** Local axis: "x" | "y" | "z" (FBX Fan hub is local Z). */
   fanSpinAxis: "z",
 };
+
+export const CONFIG = applyLevelToConfig(BASE_CONFIG, getActiveLevel());
