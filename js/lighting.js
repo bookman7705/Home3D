@@ -8,6 +8,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { assetUrl } from "asset-config";
 
 /** Default lighting-related CONFIG keys (spread into index.html CONFIG). */
 export const LIGHTING_DEFAULTS = {
@@ -34,8 +35,7 @@ export const LIGHTING_DEFAULTS = {
   /** Toggle HDR environment lighting/reflections. */
   useHdr: true,
   /** Equirect .hdr — PMREM → scene.environment only (IBL / reflections, not sky). */
-  environmentHdrUrl:
-    "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/hdr/aerodynamics_workshop_1k.hdr",
+  environmentHdrUrl: assetUrl("hdr", "aerodynamics_workshop_1k.hdr"),
   /** ACES exposure (HDR + sun). */
   toneMappingExposure: 1,
   /** Scales HDRI contribution on MeshStandardMaterial (reflections / indirect spec). */
@@ -110,29 +110,113 @@ function bloomResolution(renderer) {
   return new THREE.Vector2(size.x * dpr, size.y * dpr);
 }
 
+function emptyFrameDrawStats() {
+  return {
+    sceneCalls: 0,
+    postFxCalls: 0,
+    totalCalls: 0,
+    sceneTriangles: 0,
+    postFxTriangles: 0,
+    totalTriangles: 0,
+  };
+}
+
+function passDisplayName(pass) {
+  const name = pass?.constructor?.name;
+  if (name && name !== "Pass") return name;
+  if (pass?.isUnrealBloomPass) return "UnrealBloomPass";
+  return "Pass";
+}
+
 /**
  * Optional bloom pipeline — OutputPass applies renderer tone mapping after bloom.
- * @returns {{ render: () => void, resize: () => void, dispose: () => void, composer: EffectComposer | null }}
+ * Frame draw stats split scene RenderPass from fullscreen post-FX quads.
+ * @returns {{
+ *   render: () => void,
+ *   resize: () => void,
+ *   dispose: () => void,
+ *   composer: EffectComposer | null,
+ *   getFrameDrawStats: () => object,
+ *   getPostFxInfo: () => object,
+ * }}
  */
 export function createPostProcessing({ renderer, scene, camera, config }) {
-  const directRender = () => renderer.render(scene, camera);
+  const frameDrawStats = emptyFrameDrawStats();
+  let sceneCalls = 0;
+  let sceneTriangles = 0;
+
+  function captureComposerFrame(drawFn) {
+    const info = renderer.info;
+    const prevAuto = info.autoReset;
+    info.autoReset = false;
+    const c0 = info.render.calls;
+    const t0 = info.render.triangles;
+    sceneCalls = 0;
+    sceneTriangles = 0;
+    drawFn();
+    const totalCalls = info.render.calls - c0;
+    const totalTriangles = info.render.triangles - t0;
+    frameDrawStats.sceneCalls = sceneCalls;
+    frameDrawStats.sceneTriangles = sceneTriangles;
+    frameDrawStats.totalCalls = totalCalls;
+    frameDrawStats.totalTriangles = totalTriangles;
+    frameDrawStats.postFxCalls = Math.max(0, totalCalls - sceneCalls);
+    frameDrawStats.postFxTriangles = Math.max(0, totalTriangles - sceneTriangles);
+    info.autoReset = prevAuto;
+    if (prevAuto) info.reset();
+  }
+
+  function wrapRenderPass(renderPass) {
+    const inner = renderPass.render.bind(renderPass);
+    renderPass.render = (glRenderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
+      const c0 = glRenderer.info.render.calls;
+      const t0 = glRenderer.info.render.triangles;
+      inner(glRenderer, writeBuffer, readBuffer, deltaTime, maskActive);
+      sceneCalls = glRenderer.info.render.calls - c0;
+      sceneTriangles = glRenderer.info.render.triangles - t0;
+    };
+  }
 
   if (!config.enableBloom) {
     return {
       composer: null,
       bloomPass: null,
-      render: directRender,
+      render() {
+        captureComposerFrame(() => {
+          const c0 = renderer.info.render.calls;
+          const t0 = renderer.info.render.triangles;
+          renderer.render(scene, camera);
+          sceneCalls = renderer.info.render.calls - c0;
+          sceneTriangles = renderer.info.render.triangles - t0;
+        });
+      },
       resize: () => {},
       dispose: () => {},
       setBloomStrength() {},
       getBloomStrength() {
         return 0;
       },
+      getFrameDrawStats() {
+        return { ...frameDrawStats };
+      },
+      getPostFxInfo() {
+        return {
+          enabled: false,
+          passCount: 0,
+          passNames: [],
+          bloom: false,
+          bloomMips: 0,
+          bloomFullscreenDraws: 0,
+          outputPass: false,
+        };
+      },
     };
   }
 
   const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
+  const renderPass = new RenderPass(scene, camera);
+  wrapRenderPass(renderPass);
+  composer.addPass(renderPass);
 
   const bloomPass = new UnrealBloomPass(
     bloomResolution(renderer),
@@ -159,10 +243,15 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     `threshold=${bloomPass.threshold}`
   );
 
+  const bloomMips = Number(bloomPass.nMips) || 5;
+  const bloomFullscreenDraws = 1 + bloomMips * 2 + 1 + 1;
+
   return {
     composer,
     bloomPass,
-    render: () => composer.render(),
+    render() {
+      captureComposerFrame(() => composer.render());
+    },
     resize,
     dispose: () => composer.dispose(),
     setBloomStrength(value) {
@@ -170,6 +259,21 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     },
     getBloomStrength() {
       return bloomPass.strength;
+    },
+    getFrameDrawStats() {
+      return { ...frameDrawStats };
+    },
+    getPostFxInfo() {
+      const passNames = (composer.passes || []).map(passDisplayName);
+      return {
+        enabled: true,
+        passCount: passNames.length,
+        passNames,
+        bloom: true,
+        bloomMips,
+        bloomFullscreenDraws,
+        outputPass: passNames.includes("OutputPass"),
+      };
     },
   };
 }

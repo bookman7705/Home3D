@@ -3,12 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Light Test — baked lightmaps + normals</title>
+  <title>Room Test — modular levels</title>
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="css/styles.css" />
+  <script>
+    if (location.protocol === "file:") {
+      document.documentElement.setAttribute("data-file-protocol", "");
+    }
+  </script>
 </head>
 <body>
+  <div class="file-protocol-warning" role="alert">
+    <div class="file-protocol-warning-panel">
+      <h1>Local server required</h1>
+      <p>This page cannot run from a double-clicked HTML file (<code>file://</code>). The browser blocks the JavaScript modules.</p>
+      <p>In the project folder, run:</p>
+      <pre>npm start</pre>
+      <p>Then open <code>http://localhost:3000/</code></p>
+    </div>
+  </div>
   <button id="startBtn" type="button" hidden>Enable Look</button>
+  <button type="button" id="statsBtn">Stats</button>
   <button type="button" id="fullscreenBtn" aria-pressed="false">Fullscreen</button>
   <div id="controls" hidden aria-hidden="true">
     <button id="forward" class="move" type="button">↑</button>
@@ -22,12 +37,18 @@
     <span id="interactPromptLabel" class="interact-prompt-label"></span>
   </button>
 
-  <div id="lightDebug" hidden></div>
-
-  <div id="lightmapDebug" aria-live="polite" hidden>
-    <h3>Lightmap debug</h3>
-    <div id="lightmapDebugBody"></div>
-    <canvas id="lightmapDebugPreview" class="hidden" width="128" height="128"></canvas>
+  <div id="statsOverlay" class="stats-overlay" hidden aria-hidden="true" role="dialog" aria-labelledby="statsOverlayTitle">
+    <div class="stats-overlay-panel">
+      <header class="stats-overlay-header">
+        <h2 id="statsOverlayTitle">Performance Stats</h2>
+        <div class="stats-overlay-actions">
+          <button type="button" id="statsCopyBtn">Copy</button>
+          <button type="button" id="statsCloseBtn">Close</button>
+        </div>
+      </header>
+      <div id="statsOverlayBody" class="stats-overlay-body"></div>
+      <p class="stats-overlay-hint">Esc closes · FPS/draws update live · material/mesh structure every ~1.5s</p>
+    </div>
   </div>
 
   <script type="importmap">
@@ -35,10 +56,20 @@
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs"
+        "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs",
+        "fast-png": "https://cdn.jsdelivr.net/npm/fast-png@6.2.0/+esm",
+        "asset-config": "./js/assets.js"
       }
     }
   </script>
-  <script type="module" src="js/main.js"></script>
+  <!-- glTF KTX2 / Basis Universal: GLTFLoader.setKTX2Loader + KTX2Loader (see main.js / textures.js). -->
+  <script>
+    if (location.protocol !== "file:") {
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = "js/main.js";
+      document.body.appendChild(script);
+    }
+  </script>
 </body>
 </html>

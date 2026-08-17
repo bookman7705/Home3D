@@ -6,7 +6,7 @@ import { LIGHTING_DEFAULTS } from "./lighting.js";
 import { DEBUG_POINT_LIGHT_DEFAULTS } from "./debug-point-light.js";
 import { BLENDER_RECT_LIGHT_DEFAULTS } from "./blender-rect-area-light.js";
 import { INTERACT_DEFAULTS } from "./interact/defaults.js";
-import { ASSET_CDN } from "./assets.js";
+import { assetUrl, lightmapBasePath } from "asset-config";
 import { applyLevelToConfig, getActiveLevel } from "./levels/index.js";
 
 /**
@@ -25,8 +25,8 @@ const BASE_CONFIG = {
   lightmapBaseStem: "",
   /** glTF node name → baked PNG stem (no extension). Fallback when manifest is off. */
   lightmapMeshStems: {},
-  /** Folder containing baked PNGs and lightmap_manifest.json (R2: Home3D/LightMaps/) */
-  lightmapTextureBasePath: `${ASSET_CDN}/LightMaps/`,
+  /** Folder containing baked maps and lightmap_manifest.json (R2: Home3D/LightMaps/<level>/) */
+  lightmapTextureBasePath: lightmapBasePath("library"),
   musicVolume: 0.55,
   enableMusic: true,
   /** Load AutoLightmapv5 lightmap_manifest.json (lightmaps / meshes / meshesByName). */
@@ -35,7 +35,7 @@ const BASE_CONFIG = {
   /** Blender LightMap UV → glTF TEXCOORD_1 → three.js geometry `uv1` + lightMap.channel 1 */
   lightmapUvChannel: 1,
   /** Tried in order per base name */
-  textureExtensions: [".png", ".jpg", ".jpeg", ".webp"],
+  textureExtensions: [".ktx2", ".png", ".jpg", ".jpeg", ".webp"],
   /** Toggle baked GI lightmap loading/application. */
   enableLightMaps: true,
   /** Auto-enabled when manifest entries include AO filenames (v5+). v6 bakes AO into the lightmap PNG. */
@@ -74,7 +74,7 @@ const BASE_CONFIG = {
   cameraSpawn: [2.11, 1.71, -0.564],
   ...LIGHTING_DEFAULTS,
   /** Equirect HDR — served from Cloudflare R2. */
-  environmentHdrUrl: `${ASSET_CDN}/hdr/aerodynamics_workshop_1k.hdr`,
+  environmentHdrUrl: assetUrl("hdr", "aerodynamics_workshop_1k.hdr"),
   ...DEBUG_POINT_LIGHT_DEFAULTS,
   ...BLENDER_RECT_LIGHT_DEFAULTS,
   ...INTERACT_DEFAULTS,

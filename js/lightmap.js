@@ -4,6 +4,7 @@ import {
   applyBakedMapsToMaterial,
   finalizeGltfPbrMaterials,
 } from "./materials.js";
+import { markLightmapMaterialClone } from "./debug/gltf-identity.js";
 
 /** Non-color data maps (lightmap, AO, normals) — linear irradiance / tangent-space data. */
 const LINEAR_SPACE = THREE.NoColorSpace;
@@ -49,6 +50,7 @@ export function geometryHasLightmapUv(geometry, config) {
 /**
  * Lightmap / AO sampling — no mipmaps (avoids grain from noisy mips), clamp edges.
  * Nearest filter optional (config.disableLightmapEdgeBleeding) to avoid island bleed.
+ * Float / 16-bit lightmaps always use linear filtering so soft gradients stay smooth.
  * Cycles bakes are linear irradiance (Non-Color); flipY false for glTF.
  */
 export function configureBakedMapTexture(tex, config) {
@@ -57,7 +59,12 @@ export function configureBakedMapTexture(tex, config) {
   tex.colorSpace = LINEAR_SPACE;
   tex.flipY = false;
   tex.generateMipmaps = false;
-  const nearest = config?.disableLightmapEdgeBleeding !== false;
+  const isFloat =
+    tex.type === THREE.FloatType ||
+    tex.type === THREE.HalfFloatType ||
+    Number(tex.userData?.pngBitDepth) >= 16;
+  const nearest =
+    !isFloat && config?.disableLightmapEdgeBleeding !== false;
   tex.minFilter = nearest ? THREE.NearestFilter : THREE.LinearFilter;
   tex.magFilter = nearest ? THREE.NearestFilter : THREE.LinearFilter;
   tex.wrapS = THREE.ClampToEdgeWrapping;
@@ -170,12 +177,36 @@ function candidateUrlsForStem(stem, config) {
 }
 
 export function textureUrlFromManifestFile(filename, config) {
-  const name = String(filename ?? "").replace(/\\/g, "/").replace(/^\/+/, "");
+  const name = String(filename ?? "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .split("/")
+    .pop();
   if (!name) return "";
   return `${normalizeLightmapBasePath(config)}${name}`;
 }
 
+function withSwappedRasterExtension(url, toExt) {
+  return String(url || "").replace(/\.(png|jpe?g|webp|ktx2)($|\?)/i, `${toExt}$2`);
+}
+
+/** Prefer the manifest filename, then try KTX2/PNG counterparts. */
+export function manifestTextureCandidateUrls(filename, config) {
+  const primary = textureUrlFromManifestFile(filename, config);
+  if (!primary) return [];
+  const urls = [primary];
+  const lower = primary.toLowerCase();
+  if (lower.includes(".png")) {
+    urls.unshift(withSwappedRasterExtension(primary, ".ktx2"));
+  } else if (lower.includes(".ktx2")) {
+    urls.push(withSwappedRasterExtension(primary, ".png"));
+  }
+  return [...new Set(urls.filter(Boolean))];
+}
+
 export function lightmapManifestUrl(config) {
+  const explicit = String(config?.lightmapManifestPath ?? "").trim().replace(/\\/g, "/");
+  if (explicit) return explicit;
   const file = String(config?.lightmapManifestFilename ?? "lightmap_manifest.json").replace(
     /^\/+/,
     ""
@@ -375,6 +406,7 @@ export function parseManifestMeta(manifest) {
       manifest?.lightmapUvChannel ?? bakeSettings?.uv_channel_index
     ),
     outputFolder: String(manifest?.outputFolder ?? bakeSettings?.output_directory ?? "").trim(),
+    atlasCount: Number(manifest?.atlasCount) || sharedAtlasStems.length || 0,
     textureFormat: String(manifest?.textureFormat ?? "png").trim(),
     colorSpace: String(manifest?.colorSpace ?? "Non-Color").trim(),
     sharedAtlasStems,
@@ -530,12 +562,12 @@ async function tryLoadMap(stemSuffix, colorSpace, config, channel) {
 
 /** Try AutoLightmap naming variants plus exact/global stems (e.g. Tecxutre_LightMap.png). */
 async function tryLoadLightmapTexture(objectStem, config) {
-  const stem = String(objectStem ?? "").trim().replace(/\.png$/i, "");
+  const stem = String(objectStem ?? "").trim().replace(/\.(png|jpe?g|webp|ktx2)$/i, "");
   const candidates = [`${stem}_Lightmap`, `${stem}_LightMap`, stem];
   if (usesGlobalLightmapAtlas(config)) {
     const globalStem = String(config.lightmapBaseStem ?? "")
       .trim()
-      .replace(/\.png$/i, "")
+      .replace(/\.(png|jpe?g|webp|ktx2)$/i, "")
       .replace(/_Lightmap$/i, "");
     if (globalStem) {
       candidates.unshift(
@@ -691,7 +723,10 @@ export async function loadBakedMapPackFromManifest(manifest, config) {
 
     try {
       if (!textureCache.has(url)) {
-        textureCache.set(url, loadTextureFirstMatch([url], colorSpace));
+        textureCache.set(
+          url,
+          loadTextureFirstMatch(manifestTextureCandidateUrls(filename, effectiveConfig), colorSpace)
+        );
       }
       const { tex, url: loadedUrl } = await textureCache.get(url);
       return { tex: configureFn(tex), url: loadedUrl, ok: true, err: "" };
@@ -901,7 +936,7 @@ export function applyBakedMapsFromPack(root, pack, config, options = {}) {
         const list = Array.isArray(orig) ? orig : [orig];
         const cleared = list.map((m) => {
           if (!m?.isMeshStandardMaterial) return m;
-          const nm = m.clone();
+          const nm = markLightmapMaterialClone(m.clone(), m);
           nm.lightMap = null;
           if (config.loadAoMaps) nm.aoMap = null;
           return nm;
@@ -936,7 +971,7 @@ export function applyBakedMapsFromPack(root, pack, config, options = {}) {
       const mapKey = `${child.uuid}:${slotIndex}:${objectStem}`;
       let nm = cloneFor.get(mapKey);
       if (!nm) {
-        nm = m.clone();
+        nm = markLightmapMaterialClone(m.clone(), m);
         apply(nm);
         cloneFor.set(mapKey, nm);
       }

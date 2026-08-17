@@ -41,6 +41,15 @@ export function applyLevelToConfig(base, level) {
   if (level.lightmapTextureBasePath) {
     config.lightmapTextureBasePath = level.lightmapTextureBasePath;
   }
+  if (level.lightmapManifestPath) {
+    config.lightmapManifestPath = level.lightmapManifestPath;
+  }
+  if (level.lightmapManifestFilename) {
+    config.lightmapManifestFilename = level.lightmapManifestFilename;
+  }
+  if (level.textureExtensions) {
+    config.textureExtensions = [...level.textureExtensions];
+  }
   if (level.cameraSpawn) {
     config.cameraSpawn = [...level.cameraSpawn];
   }

@@ -1,3 +1,5 @@
+import { assetUrl } from "asset-config";
+
 /**
  * Background music with OGG → MP3 fallback and autoplay unlock for mobile Safari.
  * iOS/Android block audible playback until a user gesture; we retry on first input.
@@ -5,12 +7,8 @@
 export function createBackgroundMusic(config = {}) {
   const enabled = config.enableMusic !== false;
 
-  const oggUrl =
-    config.musicOggUrl ||
-    "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/music/Snoop.ogg";
-  const mp3Url =
-    config.musicMp3Url ||
-    "https://pub-3c9ceee935014032b48e5e145fa85eab.r2.dev/Home3D/music/snoop.mp3";
+  const oggUrl = config.musicOggUrl || assetUrl("music", "Snoop.ogg");
+  const mp3Url = config.musicMp3Url || assetUrl("music", "snoop.mp3");
   const volume = Number.isFinite(config.musicVolume) ? config.musicVolume : 0.55;
 
   const audio = document.createElement("audio");

@@ -25,7 +25,7 @@ import {
   finalizeGltfPbrMaterials,
 } from "./lightmap.js";
 import { clearLightmapsFromScene, refreshLightmapRenderSettings } from "./materials.js";
-import { createLightmapDebugUI } from "./lightmap-debug-ui.js";
+import { configureKtx2Loader, getKtx2Loader } from "./textures.js";
 import { createBlenderRectAreaLight } from "./blender-rect-area-light.js";
 import {
   createFanPointLight,
@@ -45,7 +45,8 @@ import {
   createPhysicsPlayer,
   stepPhysics,
 } from "./physics/index.js";
-import { createLightDebug } from "./debug/index.js";
+import { createPerfStats } from "./debug/index.js";
+import { stampGltfIdentity } from "./debug/gltf-identity.js";
 import {
   createFanStateController,
   createInteractSystem,
@@ -73,13 +74,14 @@ camera.position.set(spawn[0] * worldScale, spawn[1] * worldScale, spawn[2] * wor
 scene.add(camera);
 
 const renderer = new THREE.WebGLRenderer({
-  antialias: true,
+  antialias: false,
   powerPreference: "high-performance",
   stencil: false,
   depth: true,
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+configureKtx2Loader(renderer);
 configureRendererToneMapping(renderer, CONFIG);
 configureRendererShadows(renderer, CONFIG);
 document.body.appendChild(renderer.domElement);
@@ -106,9 +108,13 @@ if (CONFIG.enableBlenderRectAreaLight !== false && levelFeatures.windowRectLight
   }
 }
 
-const lightmapDebug = createLightmapDebugUI(CONFIG);
+const lightmapDebug = {
+  drawPreview() {},
+  renderPanel() {},
+};
+
 const fanPointLight =
-  levelFeatures.scenePointLight !== false
+  levelFeatures.scenePointLight === true
     ? createFanPointLight({ scene, config: CONFIG, worldScale })
     : { light: null, bedRoomLight: null, dispose() {} };
 const initialControlMode = detectControlMode();
@@ -127,11 +133,11 @@ setupRendererResize({ camera, renderer, onResize: () => postFX.resize() });
 const clock = new THREE.Clock();
 const cameraLookDir = new THREE.Vector3();
 
-const lightDebug = createLightDebug({
-  scene,
-  config: CONFIG,
-  worldScale,
-});
+const lightDebug = {
+  refreshLights() {},
+  selectByName() {},
+  update() {},
+};
 
 /** @type {{ RAPIER: any, world: any } | null} */
 let physics = null;
@@ -156,7 +162,13 @@ if (startBtn) {
     }
   };
 }
+
 const gltfLoader = new GLTFLoader();
+const ktx2ForGltf = getKtx2Loader();
+if (!ktx2ForGltf) {
+  throw new Error("KTX2Loader was not configured before GLTFLoader.");
+}
+gltfLoader.setKTX2Loader(ktx2ForGltf);
 
 /** Loaded lightmap pack + apply metadata (textures preloaded for runtime toggle). */
 let lightmapRuntime = null;
@@ -164,7 +176,38 @@ let gltfScene = null;
 /** @type {{ update: (dt: number) => void, dispose: () => void } | null} */
 let fanAnimation = null;
 
-async function loadLightmapResources(scene) {
+const perfStats = createPerfStats({
+  renderer,
+  scene,
+  camera,
+  getPostFx: () => postFX,
+  getGltfRoot: () => gltfScene,
+  getExtras: () => ({
+    level: CONFIG.levelId ?? "",
+    lightmaps: CONFIG.enableLightMaps ? "on" : "off",
+    postFX: postFX.composer ? "composer" : "direct",
+    physics: CONFIG.enablePhysics !== false ? "on" : "off",
+    pixelRatioCap: Math.min(window.devicePixelRatio || 1, 2),
+  }),
+});
+
+function stripGltfLights(root) {
+  if (!root) return;
+  const remove = [];
+  root.traverse((obj) => {
+    if (obj.isLight) remove.push(obj);
+  });
+  for (const light of remove) {
+    light.intensity = 0;
+    light.visible = false;
+    light.parent?.remove(light);
+  }
+  if (remove.length) {
+    console.info(`[Level] Stripped ${remove.length} GLB light(s)`);
+  }
+}
+
+async function loadLightmapResources(root) {
   const loadConfig = { ...CONFIG, enableLightMaps: true };
   let lightmapConfig = loadConfig;
   let pack = new Map();
@@ -208,7 +251,7 @@ async function loadLightmapResources(scene) {
   }
 
   if (!usedManifest) {
-    const bases = collectLightmapBasesFromScene(scene, loadConfig);
+    const bases = collectLightmapBasesFromScene(root, loadConfig);
     const fallback = await loadLightmapPackForBases(bases, loadConfig);
     pack = fallback.pack;
     diagnostics = fallback.diagnostics;
@@ -263,6 +306,25 @@ function syncLightmapApplication() {
   if (levelFeatures.fan !== false) {
     refreshFanShadowFlags(gltfScene);
   }
+
+  const packMaps = [];
+  const seenMaps = new Set();
+  for (const entry of pack.values()) {
+    const tex = entry?.lightMap;
+    if (tex?.isTexture && !seenMaps.has(tex.uuid)) {
+      seenMaps.add(tex.uuid);
+      packMaps.push(tex);
+    }
+  }
+  perfStats.setLightmapInfo({
+    atlasCount:
+      Number(lightmapRuntime.manifestMeta?.atlasCount) ||
+      lightmapRuntime.sharedAtlases?.size ||
+      packMaps.length,
+    lightMapTextures: packMaps,
+  });
+  perfStats.invalidateStructure();
+
   console.info(
     "[Lightmap] enableLightMaps =",
     CONFIG.enableLightMaps,
@@ -285,7 +347,7 @@ async function setupPhysicsForScene(root) {
     collisionLevel.setDebugVisible(!!CONFIG.showCollisionDebug);
 
     const eyeHeight = (CONFIG.player?.eyeHeight ?? 1.71) * worldScale;
-    const spawn = {
+    const spawnPos = {
       x: camera.position.x,
       y: camera.position.y - eyeHeight,
       z: camera.position.z,
@@ -296,7 +358,7 @@ async function setupPhysicsForScene(root) {
       world: physics.world,
       scene,
       camera,
-      spawn,
+      spawn: spawnPos,
       worldScale,
       config: {
         ...CONFIG.player,
@@ -366,6 +428,10 @@ function bootstrap() {
         scene.add(gltfScene);
         gltfScene.scale.setScalar(worldScale);
         gltfScene.updateMatrixWorld(true);
+        perfStats.setGltfMeta(stampGltfIdentity(gltf));
+        if (levelFeatures.stripGltfLights) {
+          stripGltfLights(gltfScene);
+        }
         if (levelFeatures.fan !== false) {
           // Default FanState is ON — hide Off lever before slow CDN lightmap loads.
           applyLightSwitchLeverVisibility(gltfScene, true);
@@ -426,6 +492,7 @@ function bootstrap() {
           // Re-assert bulb materials after any late material passes.
           fanState?.sync();
         }
+        perfStats.invalidateStructure();
       } catch (err) {
         console.error("[Lightmap] After GLB load:", err);
       }
@@ -469,7 +536,9 @@ function animate() {
   lightDebug.update(dt);
   fanAnimation?.update(dt);
   interactSystem?.update(dt);
+  perfStats.beginFrame();
   postFX.render();
+  perfStats.endFrame();
 }
 
 animate();

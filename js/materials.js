@@ -74,6 +74,10 @@ function configureGltfPbrMapTexture(tex, key, anisotropy) {
     tex.colorSpace = THREE.NoColorSpace;
   }
   if (anisotropy > 0) tex.anisotropy = anisotropy;
+  if (tex.isCompressedTexture || tex.userData?.isKtx2) {
+    tex.generateMipmaps = false;
+    tex.flipY = false;
+  }
   return tex;
 }
 
@@ -139,7 +143,16 @@ export function applyBakedMapsToMaterial(
   }
 
   if (config.enableLightMaps && lightMap) {
-    material.lightMap = configureBakedMapTexture(lightMap);
+    // Lighting Only materials keep emission for realtime; they must not sample the atlas
+    // (their LightMap UVs are left at unused texels and can pick up island bleed).
+    const emissiveStrength =
+      (Number(material.emissiveIntensity) || 0) *
+      Math.max(material.emissive?.r ?? 0, material.emissive?.g ?? 0, material.emissive?.b ?? 0);
+    if (emissiveStrength > 0.25) {
+      material.lightMap = null;
+    } else {
+      material.lightMap = configureBakedMapTexture(lightMap);
+    }
   }
 
   if (config.loadAoMaps && aoMap) {

@@ -4,6 +4,9 @@ node_modules/
 # Heavy assets hosted on Cloudflare R2 (models, HDR, lightmaps, music)
 assets/
 
+# Local-only offline HTML (loads assets from disk, not R2)
+offline/
+
 # OS / editor
 .DS_Store
 Thumbs.db

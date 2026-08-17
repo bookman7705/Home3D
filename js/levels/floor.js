@@ -1,11 +1,11 @@
-import { ASSET_CDN } from "../assets.js";
+import { assetUrl, lightmapBasePath } from "asset-config";
 
 /** Original floor.glb level — fan, light switch, baked lightmaps, bedroom fill. */
 export const FLOOR_LEVEL = {
   id: "floor",
-  name: "Floor",
-  glbUrl: `${ASSET_CDN}/models/floor.glb`,
-  lightmapTextureBasePath: `${ASSET_CDN}/LightMaps/`,
+  name: "Room Test",
+  glbUrl: assetUrl("models", "room_test.glb"),
+  lightmapTextureBasePath: lightmapBasePath("room_test"),
   cameraSpawn: [2.11, 1.71, -0.564],
   features: {
     music: true,
@@ -14,6 +14,7 @@ export const FLOOR_LEVEL = {
     windowRectLight: true,
     bedRoomPointLight: true,
     scenePointLight: true,
+    stripGltfLights: false,
   },
   player: {
     eyeHeight: 1.71,
@@ -22,15 +23,16 @@ export const FLOOR_LEVEL = {
   physicsGravity: { x: 0, y: -9.81, z: 0 },
   music: {
     enabled: true,
-    oggUrl: `${ASSET_CDN}/music/Snoop.ogg`,
-    mp3Url: `${ASSET_CDN}/music/snoop.mp3`,
+    oggUrl: assetUrl("music", "Snoop.ogg"),
+    mp3Url: assetUrl("music", "snoop.mp3"),
   },
   lighting: {
     ambientIntensity: 0.1,
     enableDirectionalLight: false,
     directionalIntensity: 0.0,
-    environmentHdrUrl: `${ASSET_CDN}/hdr/aerodynamics_workshop_1k.hdr`,
+    environmentHdrUrl: assetUrl("hdr", "aerodynamics_workshop_1k.hdr"),
     enableRealtimeShadows: true,
+    lightMapIntensity: 0.8,
   },
   pointLight: {
     fanPointLightPosition: [-0.071, 2.371, -6.159],
