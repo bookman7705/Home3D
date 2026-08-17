@@ -3,7 +3,7 @@ import { CONTROL_MODE } from "./control-mode.js";
 
 /**
  * Player / camera movement with PC (WASD + mouse look) and Mobile
- * (on-screen arrows + device orientation) modes.
+ * (on-screen D-pad + device orientation) modes.
  *
  * When `usePhysicsMovement` is true, this module only gathers look + move
  * input; Rapier writes `camera.position` (see physics/player-controller.js).
@@ -42,10 +42,12 @@ export function createPlayerControls({
   const lookSurface = canvas || document.body;
 
   function clearMove() {
+    heldByPointer.clear();
     move.forward = false;
     move.back = false;
     move.left = false;
     move.right = false;
+    syncHeldUi();
   }
 
   function syncModeUi() {
@@ -61,25 +63,109 @@ export function createPlayerControls({
     }
   }
 
-  function bindButton(id, key) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const set = (value) => {
-      if (mode !== CONTROL_MODE.MOBILE || !enabled) return;
-      move[key] = value;
-    };
-    el.addEventListener("touchstart", () => set(true), { passive: true });
-    el.addEventListener("touchend", () => set(false), { passive: true });
-    el.addEventListener("touchcancel", () => set(false), { passive: true });
-    el.addEventListener("mousedown", () => set(true));
-    el.addEventListener("mouseup", () => set(false));
-    el.addEventListener("mouseleave", () => set(false));
+  const padUnbind = [];
+  const heldByPointer = new Map();
+
+  function syncHeldUi() {
+    for (const key of ["forward", "back", "left", "right"]) {
+      const el = document.getElementById(key);
+      if (el) el.classList.toggle("is-held", !!move[key]);
+    }
   }
 
-  bindButton("forward", "forward");
-  bindButton("back", "back");
-  bindButton("left", "left");
-  bindButton("right", "right");
+  function applyHeld() {
+    move.forward = false;
+    move.back = false;
+    move.left = false;
+    move.right = false;
+    if (mode === CONTROL_MODE.MOBILE && enabled) {
+      for (const key of heldByPointer.values()) {
+        if (key in move) move[key] = true;
+      }
+    }
+    syncHeldUi();
+  }
+
+  function bindMovePad() {
+    if (!controlsEl) return;
+
+    function keyFromTarget(target) {
+      const el = target?.closest?.("[data-move]");
+      if (!el || !controlsEl.contains(el)) return null;
+      return el.getAttribute("data-move");
+    }
+
+    function blockBrowser(e) {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function onPointerDown(e) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const key = keyFromTarget(e.target);
+      if (!key) return;
+      blockBrowser(e);
+      heldByPointer.set(e.pointerId, key);
+      try {
+        controlsEl.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      applyHeld();
+    }
+
+    function onPointerUp(e) {
+      if (!heldByPointer.has(e.pointerId)) return;
+      blockBrowser(e);
+      heldByPointer.delete(e.pointerId);
+      applyHeld();
+    }
+
+    function setFromTouches(changedTouches, down) {
+      for (const touch of changedTouches) {
+        const id = `t${touch.identifier}`;
+        if (down) {
+          const el = document.elementFromPoint(touch.clientX, touch.clientY);
+          const key = keyFromTarget(el) || keyFromTarget(touch.target);
+          if (key) heldByPointer.set(id, key);
+        } else {
+          heldByPointer.delete(id);
+        }
+      }
+      applyHeld();
+    }
+
+    function onTouchStart(e) {
+      blockBrowser(e);
+      setFromTouches(e.changedTouches, true);
+    }
+
+    function onTouchEnd(e) {
+      blockBrowser(e);
+      setFromTouches(e.changedTouches, false);
+    }
+
+    const optsFalse = { passive: false };
+    const pairs = [
+      ["pointerdown", onPointerDown, optsFalse],
+      ["pointerup", onPointerUp, optsFalse],
+      ["pointercancel", onPointerUp, optsFalse],
+      ["lostpointercapture", onPointerUp, optsFalse],
+      ["contextmenu", blockBrowser, optsFalse],
+      ["selectstart", blockBrowser, optsFalse],
+      ["dragstart", blockBrowser, optsFalse],
+      ["touchstart", onTouchStart, optsFalse],
+      ["touchend", onTouchEnd, optsFalse],
+      ["touchcancel", onTouchEnd, optsFalse],
+    ];
+
+    for (const [type, handler, options] of pairs) {
+      controlsEl.addEventListener(type, handler, options);
+      padUnbind.push(() => controlsEl.removeEventListener(type, handler, options));
+    }
+  }
+
+  bindMovePad();
 
   function onKeyDown(e) {
     if (!enabled || mode !== CONTROL_MODE.PC) return;
@@ -310,6 +396,10 @@ export function createPlayerControls({
     document.removeEventListener("pointerlockchange", onPointerLockChange);
     document.removeEventListener("mousemove", onPointerMove);
     lookSurface.removeEventListener("click", onCanvasClick);
+    while (padUnbind.length) {
+      const unbind = padUnbind.pop();
+      unbind();
+    }
   }
 
   setMode(mode);

@@ -26,10 +26,10 @@
   <button type="button" id="statsBtn">Stats</button>
   <button type="button" id="fullscreenBtn" aria-pressed="false">Fullscreen</button>
   <div id="controls" hidden aria-hidden="true">
-    <button id="forward" class="move" type="button">↑</button>
-    <button id="left" class="move" type="button">←</button>
-    <button id="back" class="move" type="button">↓</button>
-    <button id="right" class="move" type="button">→</button>
+    <div id="forward" class="move" data-move="forward" role="button" aria-label="Move forward"></div>
+    <div id="left" class="move" data-move="left" role="button" aria-label="Move left"></div>
+    <div id="back" class="move" data-move="back" role="button" aria-label="Move back"></div>
+    <div id="right" class="move" data-move="right" role="button" aria-label="Move right"></div>
   </div>
 
   <button id="interactPrompt" type="button" class="interact-prompt" hidden aria-hidden="true">

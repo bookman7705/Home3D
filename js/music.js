@@ -1,14 +1,15 @@
 import { assetUrl } from "asset-config";
 
 /**
- * Background music with OGG → MP3 fallback and autoplay unlock for mobile Safari.
+ * Background music with optional OGG + MP3 sources and autoplay unlock for mobile Safari.
  * iOS/Android block audible playback until a user gesture; we retry on first input.
+ * A level may supply only MP3 (Safari/iOS) — do not fall back to another track's OGG.
  */
 export function createBackgroundMusic(config = {}) {
   const enabled = config.enableMusic !== false;
 
-  const oggUrl = config.musicOggUrl || assetUrl("music", "Snoop.ogg");
-  const mp3Url = config.musicMp3Url || assetUrl("music", "snoop.mp3");
+  const oggUrl = config.musicOggUrl || "";
+  const mp3Url = config.musicMp3Url || "";
   const volume = Number.isFinite(config.musicVolume) ? config.musicVolume : 0.55;
 
   const audio = document.createElement("audio");
@@ -20,15 +21,22 @@ export function createBackgroundMusic(config = {}) {
   audio.setAttribute("webkit-playsinline", "");
   audio.playsInline = true;
 
-  // Browser plays the first supported format (OGG preferred; MP3 for Safari/iOS).
-  const oggSource = document.createElement("source");
-  oggSource.src = oggUrl;
-  oggSource.type = 'audio/ogg; codecs="vorbis"';
-  const mp3Source = document.createElement("source");
-  mp3Source.src = mp3Url;
-  mp3Source.type = "audio/mpeg";
-  audio.appendChild(oggSource);
-  audio.appendChild(mp3Source);
+  function addSource(src, type) {
+    if (!src) return;
+    const source = document.createElement("source");
+    source.src = src;
+    source.type = type;
+    audio.appendChild(source);
+  }
+
+  // Explicit URLs only — otherwise default Snoop OGG → MP3.
+  if (oggUrl || mp3Url) {
+    addSource(oggUrl, 'audio/ogg; codecs="vorbis"');
+    addSource(mp3Url, "audio/mpeg");
+  } else {
+    addSource(assetUrl("music", "Snoop.ogg"), 'audio/ogg; codecs="vorbis"');
+    addSource(assetUrl("music", "snoop.mp3"), "audio/mpeg");
+  }
   audio.load();
 
   let started = false;

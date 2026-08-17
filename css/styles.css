@@ -356,27 +356,74 @@ body.stats-open {
   grid-template-columns: 60px 60px 60px;
   gap: 10px;
   z-index: 10;
+  touch-action: none;
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #controls[hidden] {
   display: none !important;
 }
 
-button.move {
+.move {
   width: 60px;
   height: 60px;
-  font-size: 18px;
   opacity: 0.75;
   border: none;
   border-radius: 8px;
+  background: #fff;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-drag: none;
+}
+
+.move::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  border-style: solid;
 }
 
 #forward { grid-column: 2; }
 #left { grid-column: 1; grid-row: 2; }
 #back { grid-column: 2; grid-row: 2; }
 #right { grid-column: 3; grid-row: 2; }
+
+#forward::before {
+  border-width: 0 10px 16px 10px;
+  border-color: transparent transparent #222 transparent;
+}
+
+#back::before {
+  border-width: 16px 10px 0 10px;
+  border-color: #222 transparent transparent transparent;
+}
+
+#left::before {
+  border-width: 10px 16px 10px 0;
+  border-color: transparent #222 transparent transparent;
+}
+
+#right::before {
+  border-width: 10px 0 10px 16px;
+  border-color: transparent transparent transparent #222;
+}
+
+.move.is-held {
+  opacity: 1;
+  background: #e8e8e8;
+}
 
 #lightDebug,
 .light-debug-panel {

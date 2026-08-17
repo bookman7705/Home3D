@@ -12,7 +12,7 @@ export const LIBRARY_REMODEL_LEVEL = {
   /** Matches the source library spawn. */
   cameraSpawn: [-3.3, 1.6, -1.4],
   features: {
-    music: false,
+    music: true,
     interact: false,
     fan: false,
     windowRectLight: false,
@@ -26,7 +26,8 @@ export const LIBRARY_REMODEL_LEVEL = {
   },
   physicsGravity: { x: 0, y: -9.81, z: 0 },
   music: {
-    enabled: false,
+    enabled: true,
+    mp3Url: assetUrl("music", "track01.mp3"),
   },
   lighting: {
     ambientIntensity: 0.2,
