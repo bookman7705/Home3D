@@ -104,6 +104,59 @@ export function finalizeGltfPbrMaterial(material, config, configureBakedMapTextu
   applyMaterialLighting(material, config, mesh);
 }
 
+const PBR_QUALITY_MAP_KEYS = [
+  "map",
+  "normalMap",
+  "roughnessMap",
+  "metalnessMap",
+  "emissiveMap",
+  "alphaMap",
+  "bumpMap",
+];
+
+function textureHasMips(tex) {
+  if (!tex) return false;
+  if (tex.generateMipmaps) return true;
+  if (Array.isArray(tex.mipmaps) && tex.mipmaps.length > 1) return true;
+  if (Array.isArray(tex.image?.mipmaps) && tex.image.mipmaps.length > 1) return true;
+  return false;
+}
+
+/**
+ * Runtime texture quality without reloading assets: anisotropy + mip filter.
+ * Leaves lightmaps/AO on their dedicated sampling path.
+ */
+export function applyTextureQualityToScene(root, quality, maxAnisotropy = 1) {
+  if (!root) return;
+  const spec =
+    quality === "low"
+      ? { anisotropy: 1, nearestMip: true }
+      : quality === "medium"
+        ? { anisotropy: 4, nearestMip: false }
+        : { anisotropy: 8, nearestMip: false };
+  const aniso = Math.max(1, Math.min(spec.anisotropy, Number(maxAnisotropy) || 1));
+  const minFilter = spec.nearestMip
+    ? THREE.LinearMipmapNearestFilter
+    : THREE.LinearMipmapLinearFilter;
+
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (!m) continue;
+      for (const key of PBR_QUALITY_MAP_KEYS) {
+        const tex = m[key];
+        if (!tex?.isTexture) continue;
+        tex.anisotropy = aniso;
+        if (textureHasMips(tex) && !tex.isCompressedTexture) {
+          tex.minFilter = minFilter;
+        }
+        tex.needsUpdate = true;
+      }
+    }
+  });
+}
+
 export function finalizeGltfPbrMaterials(root, config, configureBakedMapTexture) {
   root.traverse((o) => {
     if (!o.isMesh) return;

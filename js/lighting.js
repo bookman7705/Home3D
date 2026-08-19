@@ -9,6 +9,9 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { assetUrl } from "asset-config";
+import { BLOOM_QUALITY } from "./performance/constants.js";
+
+const _size = new THREE.Vector2();
 
 /** Default lighting-related CONFIG keys (spread into index.html CONFIG). */
 export const LIGHTING_DEFAULTS = {
@@ -87,6 +90,72 @@ export function configureRendererShadows(renderer, config) {
   }
 }
 
+const SHADOW_TYPE = {
+  pcfsoft: THREE.PCFSoftShadowMap,
+  pcf: THREE.PCFShadowMap,
+  basic: THREE.BasicShadowMap,
+};
+
+/**
+ * Runtime shadow quality for the fan point-light path. No-op when quality is off.
+ * Changing map size disposes the existing shadow render target once — not per frame.
+ */
+export function applyRealtimeShadowQuality({
+  renderer,
+  scene,
+  pointLight = null,
+  quality = "off",
+  config = {},
+} = {}) {
+  if (!renderer) return;
+
+  if (quality === "off") {
+    renderer.shadowMap.enabled = false;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = false;
+    if (pointLight?.isLight) pointLight.castShadow = false;
+    scene?.traverse((o) => {
+      if (o.isLight) o.castShadow = false;
+    });
+    return;
+  }
+
+  const spec =
+    quality === "low"
+      ? { mapSize: 64, type: "basic", radius: 1 }
+      : quality === "medium"
+        ? { mapSize: 128, type: "pcf", radius: 4 }
+        : { mapSize: 256, type: "pcfsoft", radius: 8 };
+
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = SHADOW_TYPE[spec.type] || THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = true;
+
+  const light = pointLight;
+  if (light?.isLight) {
+    const mapSize = Math.max(32, spec.mapSize);
+    light.castShadow = true;
+    light.shadow.mapSize.set(mapSize, mapSize);
+    light.shadow.radius = spec.radius;
+    if (config.pointLightShadowBias != null) {
+      light.shadow.bias = Number(config.pointLightShadowBias);
+    }
+    if (light.shadow.map) {
+      light.shadow.map.dispose();
+      light.shadow.map = null;
+    }
+    light.shadow.needsUpdate = true;
+  }
+
+  scene?.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (m) m.needsUpdate = true;
+    }
+  });
+}
+
 /** Turn off cast/receive shadow flags on meshes and lights (e.g. after GLB import). */
 export function disableRealtimeShadowsInScene(root) {
   if (!root) return;
@@ -103,11 +172,32 @@ export function disableRealtimeShadowsInScene(root) {
   });
 }
 
-function bloomResolution(renderer) {
-  const size = new THREE.Vector2();
-  renderer.getSize(size);
+function drawingBufferSize(renderer) {
+  renderer.getSize(_size);
   const dpr = renderer.getPixelRatio();
-  return new THREE.Vector2(size.x * dpr, size.y * dpr);
+  return { w: Math.max(1, Math.round(_size.x * dpr)), h: Math.max(1, Math.round(_size.y * dpr)) };
+}
+
+function bloomScaleFor(bloomQuality, postQuality) {
+  const spec = BLOOM_QUALITY[bloomQuality] || BLOOM_QUALITY.high;
+  let scale = spec.resolutionScale;
+  if (postQuality === "medium") scale *= 0.85;
+  if (postQuality === "low") scale *= 0.7;
+  return Math.max(0.25, scale);
+}
+
+function applyBloomMipCount(bloomPass, nMips) {
+  const n = Math.max(2, Math.min(5, nMips | 0));
+  bloomPass.nMips = n;
+  const vertical = bloomPass.renderTargetsVertical || [];
+  const last = vertical[n - 1]?.texture || vertical[0]?.texture;
+  if (!last) return n;
+  for (let i = 0; i < 5; i++) {
+    const tex = i < n && vertical[i] ? vertical[i].texture : last;
+    const uniform = bloomPass.compositeMaterial?.uniforms?.[`blurTexture${i + 1}`];
+    if (uniform) uniform.value = tex;
+  }
+  return n;
 }
 
 function emptyFrameDrawStats() {
@@ -129,21 +219,17 @@ function passDisplayName(pass) {
 }
 
 /**
- * Optional bloom pipeline — OutputPass applies renderer tone mapping after bloom.
+ * Bloom pipeline — OutputPass applies renderer tone mapping after bloom.
+ * Composer is always created so bloom / post-FX can be toggled at runtime.
  * Frame draw stats split scene RenderPass from fullscreen post-FX quads.
- * @returns {{
- *   render: () => void,
- *   resize: () => void,
- *   dispose: () => void,
- *   composer: EffectComposer | null,
- *   getFrameDrawStats: () => object,
- *   getPostFxInfo: () => object,
- * }}
  */
 export function createPostProcessing({ renderer, scene, camera, config }) {
   const frameDrawStats = emptyFrameDrawStats();
   let sceneCalls = 0;
   let sceneTriangles = 0;
+  let composerEnabled = true;
+  let bloomQuality = "high";
+  let postQuality = "high";
 
   function captureComposerFrame(drawFn) {
     const info = renderer.info;
@@ -177,63 +263,44 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     };
   }
 
-  if (!config.enableBloom) {
-    return {
-      composer: null,
-      bloomPass: null,
-      render() {
-        captureComposerFrame(() => {
-          const c0 = renderer.info.render.calls;
-          const t0 = renderer.info.render.triangles;
-          renderer.render(scene, camera);
-          sceneCalls = renderer.info.render.calls - c0;
-          sceneTriangles = renderer.info.render.triangles - t0;
-        });
-      },
-      resize: () => {},
-      dispose: () => {},
-      setBloomStrength() {},
-      getBloomStrength() {
-        return 0;
-      },
-      getFrameDrawStats() {
-        return { ...frameDrawStats };
-      },
-      getPostFxInfo() {
-        return {
-          enabled: false,
-          passCount: 0,
-          passNames: [],
-          bloom: false,
-          bloomMips: 0,
-          bloomFullscreenDraws: 0,
-          outputPass: false,
-        };
-      },
-    };
-  }
-
   const composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
   wrapRenderPass(renderPass);
   composer.addPass(renderPass);
 
+  const initialSize = drawingBufferSize(renderer);
   const bloomPass = new UnrealBloomPass(
-    bloomResolution(renderer),
+    new THREE.Vector2(initialSize.w, initialSize.h),
     Number(config.bloomStrength) || 0.35,
     Number(config.bloomRadius) || 0.42,
     Number(config.bloomThreshold) ?? 0.82
   );
+  bloomPass.enabled = config.enableBloom !== false;
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
 
+  function resizeBloomTargets() {
+    const buf = drawingBufferSize(renderer);
+    const scale = bloomPass.enabled ? bloomScaleFor(bloomQuality, postQuality) : 1;
+    const bw = Math.max(1, Math.round(buf.w * scale));
+    const bh = Math.max(1, Math.round(buf.h * scale));
+    bloomPass.setSize(bw, bh);
+    bloomPass.resolution.set(bw, bh);
+  }
+
   function resize() {
-    const size = new THREE.Vector2();
-    renderer.getSize(size);
-    const dpr = renderer.getPixelRatio();
-    composer.setSize(size.x, size.y);
-    composer.setPixelRatio(dpr);
-    bloomPass.resolution.copy(bloomResolution(renderer));
+    renderer.getSize(_size);
+    composer.setPixelRatio(renderer.getPixelRatio());
+    composer.setSize(_size.x, _size.y);
+    resizeBloomTargets();
+  }
+
+  function setBloomQuality(nextBloomQuality, nextPostQuality) {
+    if (nextBloomQuality) bloomQuality = nextBloomQuality;
+    if (nextPostQuality) postQuality = nextPostQuality;
+    const spec = BLOOM_QUALITY[bloomQuality] || BLOOM_QUALITY.high;
+    applyBloomMipCount(bloomPass, spec.nMips);
+    resizeBloomTargets();
   }
 
   console.info(
@@ -243,17 +310,37 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     `threshold=${bloomPass.threshold}`
   );
 
-  const bloomMips = Number(bloomPass.nMips) || 5;
-  const bloomFullscreenDraws = 1 + bloomMips * 2 + 1 + 1;
-
   return {
     composer,
     bloomPass,
     render() {
+      if (!composerEnabled) {
+        captureComposerFrame(() => {
+          const c0 = renderer.info.render.calls;
+          const t0 = renderer.info.render.triangles;
+          renderer.render(scene, camera);
+          sceneCalls = renderer.info.render.calls - c0;
+          sceneTriangles = renderer.info.render.triangles - t0;
+        });
+        return;
+      }
       captureComposerFrame(() => composer.render());
     },
     resize,
     dispose: () => composer.dispose(),
+    setComposerEnabled(on) {
+      composerEnabled = !!on;
+    },
+    isComposerEnabled() {
+      return composerEnabled;
+    },
+    setBloomEnabled(on) {
+      bloomPass.enabled = !!on;
+    },
+    getBloomEnabled() {
+      return !!bloomPass.enabled && composerEnabled;
+    },
+    setBloomQuality,
     setBloomStrength(value) {
       bloomPass.strength = Math.max(0, Number(value) || 0);
     },
@@ -264,15 +351,21 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
       return { ...frameDrawStats };
     },
     getPostFxInfo() {
-      const passNames = (composer.passes || []).map(passDisplayName);
+      const bloomOn = !!bloomPass.enabled && composerEnabled;
+      const nMips = bloomOn ? Number(bloomPass.nMips) || 0 : 0;
+      const passNames = composerEnabled
+        ? (composer.passes || [])
+            .filter((p) => p.enabled !== false)
+            .map(passDisplayName)
+        : [];
       return {
-        enabled: true,
+        enabled: composerEnabled,
         passCount: passNames.length,
         passNames,
-        bloom: true,
-        bloomMips,
-        bloomFullscreenDraws,
-        outputPass: passNames.includes("OutputPass"),
+        bloom: bloomOn,
+        bloomMips: nMips,
+        bloomFullscreenDraws: bloomOn ? 1 + nMips * 2 + 1 + 1 : 0,
+        outputPass: composerEnabled && passNames.includes("OutputPass"),
       };
     },
   };

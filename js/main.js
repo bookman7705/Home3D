@@ -53,6 +53,7 @@ import {
   applyLightSwitchLeverVisibility,
 } from "./interact/index.js";
 import { createBackgroundMusic } from "./music.js";
+import { createPerformanceSystem, pixelRatioForQuality, loadPerformanceSettings } from "./performance/index.js";
 
 const worldScale = Math.max(0.0001, Number(CONFIG.worldScale) || 1);
 const levelFeatures = CONFIG.levelFeatures ?? {};
@@ -80,7 +81,8 @@ const renderer = new THREE.WebGLRenderer({
   depth: true,
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const storedPerf = loadPerformanceSettings();
+renderer.setPixelRatio(pixelRatioForQuality(storedPerf.settings.renderQuality));
 configureKtx2Loader(renderer);
 configureRendererToneMapping(renderer, CONFIG);
 configureRendererShadows(renderer, CONFIG);
@@ -128,7 +130,6 @@ const player = createPlayerControls({
   enableJump: !!CONFIG.enableJump,
 });
 setupFullscreen();
-setupRendererResize({ camera, renderer, onResize: () => postFX.resize() });
 
 const clock = new THREE.Clock();
 const cameraLookDir = new THREE.Vector3();
@@ -185,11 +186,26 @@ const perfStats = createPerfStats({
   getExtras: () => ({
     level: CONFIG.levelId ?? "",
     lightmaps: CONFIG.enableLightMaps ? "on" : "off",
-    postFX: postFX.composer ? "composer" : "direct",
     physics: CONFIG.enablePhysics !== false ? "on" : "off",
-    pixelRatioCap: Math.min(window.devicePixelRatio || 1, 2),
+    ...(perfSystem?.getStatsExtras() || {}),
   }),
 });
+
+const perfSystem = createPerformanceSystem({
+  renderer,
+  scene,
+  camera,
+  postFX,
+  config: CONFIG,
+  hooks: {
+    getGltfRoot: () => gltfScene,
+    syncLightmaps: () => syncLightmapApplication(),
+    getShadowLight: () => fanPointLight.light,
+    invalidatePerfStats: () => perfStats.invalidateStructure(),
+    closeStats: () => perfStats.close(),
+  },
+});
+setupRendererResize({ camera, onResize: () => perfSystem.handleResize() });
 
 function stripGltfLights(root) {
   if (!root) return;
@@ -484,6 +500,7 @@ function bootstrap() {
 
         syncLightmapApplication();
         refreshLightmapRenderSettings(gltfScene, lightmapRuntime.lightmapConfig);
+        perfSystem.reapplySceneSettings();
         if (levelFeatures.fan !== false) {
           // Lightmap/material passes can rebuild materials — re-assert Fan shadows.
           refreshFanShadowFlags(gltfScene);
@@ -539,6 +556,7 @@ function animate() {
   perfStats.beginFrame();
   postFX.render();
   perfStats.endFrame();
+  perfSystem.tick(dt);
 }
 
 animate();

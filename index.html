@@ -23,6 +23,7 @@
     </div>
   </div>
   <button id="startBtn" type="button" hidden>Enable Look</button>
+  <button type="button" id="settingsBtn">Settings</button>
   <button type="button" id="statsBtn">Stats</button>
   <button type="button" id="fullscreenBtn" aria-pressed="false">Fullscreen</button>
   <div id="controls" hidden aria-hidden="true">
@@ -51,6 +52,50 @@
     </div>
   </div>
 
+  <div id="settingsOverlay" class="settings-overlay" hidden aria-hidden="true" role="dialog" aria-labelledby="settingsOverlayTitle">
+    <div class="settings-overlay-panel">
+      <header class="settings-overlay-header">
+        <h2 id="settingsOverlayTitle">Settings</h2>
+        <button type="button" id="settingsCloseBtn">Close</button>
+      </header>
+      <div id="settingsBody" class="settings-overlay-body"></div>
+    </div>
+  </div>
+
+  <div id="settingsRestartModal" class="settings-modal" hidden aria-hidden="true" role="alertdialog" aria-labelledby="settingsRestartTitle">
+    <div class="settings-modal-panel">
+      <h2 id="settingsRestartTitle">Restart required</h2>
+      <p>Some graphics changes require the application to restart before they take effect.</p>
+      <p class="settings-modal-pending">Pending: <span id="settingsRestartList"></span></p>
+      <p>Restart now?</p>
+      <div class="settings-modal-actions">
+        <button type="button" id="settingsRestartCancel">Cancel</button>
+        <button type="button" id="settingsRestartConfirm" class="settings-btn-primary">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsFirstRunModal" class="settings-modal" hidden aria-hidden="true" role="dialog" aria-labelledby="settingsFirstRunTitle">
+    <div class="settings-modal-panel">
+      <h2 id="settingsFirstRunTitle">Graphics recommendation</h2>
+      <p id="settingsFirstRunBody" class="settings-modal-body"></p>
+      <div class="settings-modal-actions">
+        <button type="button" id="settingsFirstRunKeep">Keep High Quality</button>
+        <button type="button" id="settingsFirstRunUse" class="settings-btn-primary">Use Recommended</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="perfMonitorHud" class="perf-monitor-hud" hidden aria-hidden="true">
+    <div><span>FPS</span><strong data-hud="fps">—</strong></div>
+    <div><span>Frame</span><strong data-hud="ms">—</strong></div>
+    <div><span>Res</span><strong data-hud="res">—</strong></div>
+    <div><span>PR</span><strong data-hud="pr">—</strong></div>
+    <div><span>Draws</span><strong data-hud="draws">—</strong></div>
+    <div><span>PostFX</span><strong data-hud="fx">—</strong></div>
+    <div><span>Tris</span><strong data-hud="tris">—</strong></div>
+  </div>
+
   <script type="importmap">
     {
       "imports": {
@@ -58,7 +103,7 @@
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
         "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs",
         "fast-png": "https://cdn.jsdelivr.net/npm/fast-png@6.2.0/+esm",
-        "asset-config": "./js/assets.js"
+        "asset-config": "./js/asset-source.js"
       }
     }
   </script>

@@ -13,6 +13,7 @@ const UI_HIDE_SELECTORS = [
   "#fullscreenBtn",
   "#controls",
   "#interactPrompt",
+  "#settingsBtn",
 ];
 
 const CHEAP_REFRESH_MS = 250;
