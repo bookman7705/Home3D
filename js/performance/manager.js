@@ -38,6 +38,7 @@ function minPixelRatioForQuality(renderQuality, devicePixelRatio = window.device
 
 /**
  * Central owner of renderer pixel ratio, composer size, bloom, and adaptive quality.
+ * Dynamic resolution scales EffectComposer targets only — never the canvas buffer.
  */
 export function createPerformanceManager({
   renderer,
@@ -106,17 +107,32 @@ export function createPerformanceManager({
     const hi = maxPixelRatio();
     const pr = clamp(Number(nextPR) || hi, lo, hi);
     const sizeChanged = cssW !== lastCssW || cssH !== lastCssH;
-    const prChanged = Math.abs(pr - renderer.getPixelRatio()) > 0.001;
-    if (!force && !sizeChanged && !prChanged) return false;
+    const displayPR = hi;
+    const canvas = renderer.domElement;
+    const nextBufW = Math.max(1, Math.floor(cssW * displayPR));
+    const nextBufH = Math.max(1, Math.floor(cssH * displayPR));
+    const bufferChanged = canvas.width !== nextBufW || canvas.height !== nextBufH;
+    const renderChanged = Math.abs(pr - effectivePixelRatio) > 0.001;
+    if (!force && !sizeChanged && !bufferChanged && !renderChanged) return false;
 
     camera.aspect = cssW / Math.max(1, cssH);
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(pr);
-    renderer.setSize(cssW, cssH);
-    postFX.resize();
-    effectivePixelRatio = renderer.getPixelRatio();
+
+    // Keep the canvas drawing buffer at the quality cap. Changing canvas.width
+    // (setPixelRatio / setSize) clears the bitmap and blinks on mobile browsers.
+    // Dynamic resolution only scales composer render targets, then blits up.
+    if (sizeChanged || bufferChanged) {
+      const displayChanged = Math.abs(renderer.getPixelRatio() - displayPR) > 0.001;
+      if (displayChanged) renderer.setPixelRatio(displayPR);
+      if (sizeChanged || canvas.width !== nextBufW || canvas.height !== nextBufH) {
+        renderer.setSize(cssW, cssH, sizeChanged);
+      }
+    }
+
+    effectivePixelRatio = pr;
     lastCssW = cssW;
     lastCssH = cssH;
+    postFX.resize(pr);
     return true;
   }
 
@@ -130,7 +146,7 @@ export function createPerformanceManager({
     } else if (composerOn) {
       postFX.setBloomQuality("low", settings.postProcessingQuality);
     }
-    postFX.resize();
+    postFX.resize(effectivePixelRatio);
   }
 
   function applyLightmaps(settings) {
@@ -229,10 +245,9 @@ export function createPerformanceManager({
   }
 
   function drawingBuffer() {
-    const canvas = renderer.domElement;
     return {
-      w: canvas?.width || 0,
-      h: canvas?.height || 0,
+      w: Math.max(1, Math.round(lastCssW * effectivePixelRatio)),
+      h: Math.max(1, Math.round(lastCssH * effectivePixelRatio)),
     };
   }
 
@@ -303,20 +318,20 @@ export function createPerformanceManager({
     if (avgFrameMs > target.warningMs && atMinPR && since > AUTO_PERF.cooldownMs) {
       if (autoStep === 0 && current.bloomQuality === "high" && runtimeHasBloom()) {
         postFX.setBloomQuality("medium", current.postProcessingQuality);
-        postFX.resize();
+        postFX.resize(effectivePixelRatio);
         autoStep = 1;
         lastAutoChangeAt = now;
         emit("auto", { step: autoStep, action: "bloom-medium" });
       } else if (autoStep <= 1 && runtimeHasBloom()) {
         postFX.setBloomEnabled(false);
-        postFX.resize();
+        postFX.resize(effectivePixelRatio);
         autoStep = 2;
         lastAutoChangeAt = now;
         emit("auto", { step: autoStep, action: "bloom-off" });
       } else if (autoStep <= 2 && current.postProcessingQuality === "high") {
         postFX.setBloomQuality("low", "low");
         postFX.setComposerEnabled(true);
-        postFX.resize();
+        postFX.resize(effectivePixelRatio);
         autoStep = 3;
         lastAutoChangeAt = now;
         emit("auto", { step: autoStep, action: "postfx-low" });
@@ -347,7 +362,7 @@ export function createPerformanceManager({
           current.bloomQuality === "high" ? "medium" : current.bloomQuality,
           current.postProcessingQuality
         );
-        postFX.resize();
+        postFX.resize(effectivePixelRatio);
         autoStep = 1;
       } else if (autoStep >= 1) {
         applyBloomAndPost(current);

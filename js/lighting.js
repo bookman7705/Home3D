@@ -172,9 +172,9 @@ export function disableRealtimeShadowsInScene(root) {
   });
 }
 
-function drawingBufferSize(renderer) {
+function drawingBufferSize(renderer, pixelRatio = renderer.getPixelRatio()) {
   renderer.getSize(_size);
-  const dpr = renderer.getPixelRatio();
+  const dpr = Number(pixelRatio) || renderer.getPixelRatio();
   return { w: Math.max(1, Math.round(_size.x * dpr)), h: Math.max(1, Math.round(_size.y * dpr)) };
 }
 
@@ -230,6 +230,7 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
   let composerEnabled = true;
   let bloomQuality = "high";
   let postQuality = "high";
+  let renderPixelRatio = renderer.getPixelRatio();
 
   function captureComposerFrame(drawFn) {
     const info = renderer.info;
@@ -279,8 +280,16 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
 
+  function needsResolutionScale() {
+    return Math.abs(renderPixelRatio - renderer.getPixelRatio()) > 0.02;
+  }
+
+  function usesComposer() {
+    return composerEnabled || needsResolutionScale();
+  }
+
   function resizeBloomTargets() {
-    const buf = drawingBufferSize(renderer);
+    const buf = drawingBufferSize(renderer, renderPixelRatio);
     const scale = bloomPass.enabled ? bloomScaleFor(bloomQuality, postQuality) : 1;
     const bw = Math.max(1, Math.round(buf.w * scale));
     const bh = Math.max(1, Math.round(buf.h * scale));
@@ -288,9 +297,12 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     bloomPass.resolution.set(bw, bh);
   }
 
-  function resize() {
+  function resize(nextRenderPixelRatio) {
+    if (Number.isFinite(nextRenderPixelRatio) && nextRenderPixelRatio > 0) {
+      renderPixelRatio = nextRenderPixelRatio;
+    }
     renderer.getSize(_size);
-    composer.setPixelRatio(renderer.getPixelRatio());
+    composer.setPixelRatio(renderPixelRatio);
     composer.setSize(_size.x, _size.y);
     resizeBloomTargets();
   }
@@ -314,7 +326,7 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     composer,
     bloomPass,
     render() {
-      if (!composerEnabled) {
+      if (!usesComposer()) {
         captureComposerFrame(() => {
           const c0 = renderer.info.render.calls;
           const t0 = renderer.info.render.triangles;
@@ -350,22 +362,26 @@ export function createPostProcessing({ renderer, scene, camera, config }) {
     getFrameDrawStats() {
       return { ...frameDrawStats };
     },
+    getRenderPixelRatio() {
+      return renderPixelRatio;
+    },
     getPostFxInfo() {
-      const bloomOn = !!bloomPass.enabled && composerEnabled;
+      const composerOn = usesComposer();
+      const bloomOn = !!bloomPass.enabled && composerOn;
       const nMips = bloomOn ? Number(bloomPass.nMips) || 0 : 0;
-      const passNames = composerEnabled
+      const passNames = composerOn
         ? (composer.passes || [])
             .filter((p) => p.enabled !== false)
             .map(passDisplayName)
         : [];
       return {
-        enabled: composerEnabled,
+        enabled: composerOn,
         passCount: passNames.length,
         passNames,
         bloom: bloomOn,
         bloomMips: nMips,
         bloomFullscreenDraws: bloomOn ? 1 + nMips * 2 + 1 + 1 : 0,
-        outputPass: composerEnabled && passNames.includes("OutputPass"),
+        outputPass: composerOn && passNames.includes("OutputPass"),
       };
     },
   };

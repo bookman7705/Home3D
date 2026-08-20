@@ -162,7 +162,7 @@ export const SETTING_META = {
   dynamicResolution: {
     requiresRestart: false,
     label: "Dynamic Resolution",
-    description: "Smoothly lowers pixel ratio when frame time is high, without exceeding the selected quality.",
+    description: "Smoothly lowers internal render resolution when frame time is high, without exceeding the selected quality.",
   },
   bloom: {
     requiresRestart: false,
