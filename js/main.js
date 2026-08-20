@@ -54,6 +54,7 @@ import {
 } from "./interact/index.js";
 import { createBackgroundMusic } from "./music.js";
 import { createPerformanceSystem, pixelRatioForQuality, loadPerformanceSettings } from "./performance/index.js";
+import { createLodSystem } from "./lod/index.js";
 
 const worldScale = Math.max(0.0001, Number(CONFIG.worldScale) || 1);
 const levelFeatures = CONFIG.levelFeatures ?? {};
@@ -176,6 +177,8 @@ let lightmapRuntime = null;
 let gltfScene = null;
 /** @type {{ update: (dt: number) => void, dispose: () => void } | null} */
 let fanAnimation = null;
+/** @type {ReturnType<typeof createLodSystem> | null} */
+let lodSystem = null;
 
 const perfStats = createPerfStats({
   renderer,
@@ -183,12 +186,23 @@ const perfStats = createPerfStats({
   camera,
   getPostFx: () => postFX,
   getGltfRoot: () => gltfScene,
-  getExtras: () => ({
-    level: CONFIG.levelId ?? "",
-    lightmaps: CONFIG.enableLightMaps ? "on" : "off",
-    physics: CONFIG.enablePhysics !== false ? "on" : "off",
-    ...(perfSystem?.getStatsExtras() || {}),
-  }),
+  getExtras: () => {
+    const lod = lodSystem?.getSnapshot();
+    return {
+      level: CONFIG.levelId ?? "",
+      lightmaps: CONFIG.enableLightMaps ? "on" : "off",
+      physics: CONFIG.enablePhysics !== false ? "on" : "off",
+      ...(perfSystem?.getStatsExtras() || {}),
+      lodGroups: lod?.groupCount ?? 0,
+      lod:
+        lod?.groups
+          ?.map((g) => {
+            const level = g.current == null ? "hidden" : `LOD${g.current}`;
+            return `${g.base}=${level}@${g.distance.toFixed(1)}m`;
+          })
+          .join(", ") || "none",
+    };
+  },
 });
 
 const perfSystem = createPerformanceSystem({
@@ -509,6 +523,16 @@ function bootstrap() {
           // Re-assert bulb materials after any late material passes.
           fanState?.sync();
         }
+        lodSystem?.dispose();
+        lodSystem = createLodSystem({
+          root: gltfScene,
+          camera,
+          config: CONFIG,
+          worldScale,
+          hooks: {
+            onChange: () => perfStats.invalidateStructure(),
+          },
+        });
         perfStats.invalidateStructure();
       } catch (err) {
         console.error("[Lightmap] After GLB load:", err);
@@ -553,6 +577,7 @@ function animate() {
   lightDebug.update(dt);
   fanAnimation?.update(dt);
   interactSystem?.update(dt);
+  lodSystem?.update(dt);
   perfStats.beginFrame();
   postFX.render();
   perfStats.endFrame();

@@ -8,6 +8,7 @@ import { BLENDER_RECT_LIGHT_DEFAULTS } from "./blender-rect-area-light.js";
 import { INTERACT_DEFAULTS } from "./interact/defaults.js";
 import { assetUrl, lightmapBasePath } from "asset-config";
 import { applyLevelToConfig, getActiveLevel } from "./levels/index.js";
+import { LOD_DEFAULTS } from "./lod/constants.js";
 
 /**
  * AutoLightmapv5: per-object entries in lightmaps/lightmap_manifest.json
@@ -111,6 +112,11 @@ const BASE_CONFIG = {
   fanSpinRpm: 20,
   /** Local axis: "x" | "y" | "z" (FBX Fan hub is local Z). */
   fanSpinAxis: "z",
+  /**
+   * GLB `_LODX` grouping. Override per level with `level.lod`.
+   * See js/lod/constants.js for distance / hysteresis / fade knobs.
+   */
+  lod: { ...LOD_DEFAULTS },
 };
 
 export const CONFIG = applyLevelToConfig(BASE_CONFIG, getActiveLevel());

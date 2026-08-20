@@ -53,4 +53,26 @@ export const LIBRARY_REMODEL_LEVEL = {
   interact: {
     enableInteract: false,
   },
+  /**
+   * Table1_LOD0..2 and Table2_LOD0..2 in library.glb.
+   * Debug HUD is on so you can watch the swap while walking the room.
+   */
+  lod: {
+    enabled: true,
+    debug: true,
+    distances: [3.5, 8],
+    cullDistance: 22,
+    hysteresis: 0.2,
+    dwellMs: 180,
+    overrides: {
+      Table1: {
+        distances: [10, 15],
+        cullDistance: 25,
+      },
+      Table2: {
+        distances: [10, 15],
+        cullDistance: 25,
+      },
+    },
+  },
 };

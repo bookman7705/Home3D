@@ -70,6 +70,16 @@ export function applyLevelToConfig(base, level) {
   if (level.pointLight) Object.assign(config, level.pointLight);
   if (level.rectAreaLight) Object.assign(config, level.rectAreaLight);
   if (level.interact) Object.assign(config, level.interact);
+  if (level.lod) {
+    config.lod = { ...config.lod, ...level.lod };
+    if (level.lod.distances) config.lod.distances = [...level.lod.distances];
+    if (level.lod.ignoreNamePrefixes) {
+      config.lod.ignoreNamePrefixes = [...level.lod.ignoreNamePrefixes];
+    }
+    if (level.lod.overrides) {
+      config.lod.overrides = { ...config.lod?.overrides, ...level.lod.overrides };
+    }
+  }
 
   return config;
 }
